@@ -1,0 +1,171 @@
+<!doctype html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no">
+    <title>Upload Excel File</title>
+    <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/bootstrap/5.1.3/css/bootstrap.min.css">
+    <style>
+        body {
+            background-color: #f8f9fa;
+            padding: 2rem;
+        }
+        #progressContainer, #downloadContainer, #cancelContainer {
+            margin-top: 2rem;
+        }
+        #uploadForm {
+            border: 1px solid #dee2e6;
+            padding: 2rem;
+            background-color: #ffffff;
+            border-radius: 0.5rem;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1 class="text-center mb-4">Upload an Excel File to Generate Background Images</h1>
+        
+        <div class="row justify-content-center">
+            <div class="col-md-8">
+                <!-- Display Current API Key -->
+                <div id="apiKeyContainer" class="mb-4">
+                    <h4>Current OpenAI API Key:</h4>
+                    <p id="currentApiKey">{{ api_key if api_key else "No API Key Set" }}</p>
+                    <form method="POST" action="{{ url_for('set_api_key') }}">
+                        <div class="mb-3">
+                            <label for="api_key" class="form-label">Set/OpenAI API Key:</label>
+                            <input type="text" class="form-control" id="api_key" name="api_key" value="{{ api_key }}" required>
+                        </div>
+                        <button type="submit" class="btn btn-primary w-100">Update API Key</button>
+                    </form>
+                </div>
+
+                <!-- File Upload Form -->
+                <form id="uploadForm" enctype="multipart/form-data">
+                    <div class="mb-3">
+                        <input type="file" class="form-control" name="file" id="fileInput" accept=".xlsx" required>
+                    </div>
+                    <button type="submit" class="btn btn-primary w-100">Upload</button>
+                </form>
+            </div>
+        </div>
+
+        <div id="progressContainer" class="text-center" style="display: none;">
+            <h3>Progress:</h3>
+            <progress id="progressBar" value="0" max="100" class="w-100"></progress>
+            <span id="progressPercentage">0%</span>
+            <p id="imageCount">Generated images: 0/0</p>
+        </div>
+
+        <div id="cancelContainer" class="text-center" style="display: none;">
+            <button id="cancelButton" class="btn btn-danger">Cancel Task</button>
+        </div>
+
+        <div id="downloadContainer" class="text-center" style="display: none;">
+            <h3>Download:</h3>
+            <a id="downloadLink" href="#" class="btn btn-success">Download Generated Images</a>
+        </div>
+    </div>
+
+    <script>
+        $(document).ready(function() {
+            let currentTaskId = null;
+
+            $('#uploadForm').on('submit', function(event) {
+                event.preventDefault();
+                const formData = new FormData(this);
+                $('#progressContainer').show();
+                $('#cancelContainer').show();
+
+                $.ajax({
+                    url: '/upload',
+                    type: 'POST',
+                    data: formData,
+                    processData: false,
+                    contentType: false,
+                    xhrFields: {
+                        withCredentials: true
+                    },
+                    success: function(response) {
+                        currentTaskId = response.task_id;
+                        console.log('Task ID:', currentTaskId); // Debugging line to ensure Task ID is returned
+                        checkProgress(currentTaskId);
+                    },
+                    error: function() {
+                        alert('Error uploading the file.');
+                    }
+                });
+            });
+
+            $('#cancelButton').on('click', function() {
+                if (currentTaskId) {
+                    $.ajax({
+                        url: `/cancel/${currentTaskId}`,
+                        type: 'POST',
+                        xhrFields: {
+                            withCredentials: true
+                        },
+                        success: function(response) {
+                            alert('Task has been canceled.');
+                            $('#progressContainer').hide();
+                            $('#cancelContainer').hide();
+                            $('#progressBar').val(0);
+                            $('#progressPercentage').text('0%');
+                            $('#imageCount').text('Generated images: 0/0');
+                        },
+                        error: function() {
+                            alert('Error canceling the task.');
+                        }
+                    });
+                }
+            });
+
+            function checkProgress(taskId) {
+                setTimeout(function() {
+                    const interval = setInterval(function() {
+                        $.ajax({
+                            url: `/progress/${taskId}`,
+                            type: 'GET',
+                            success: function(response) {
+                                console.log('Progress response:', response); // Debugging line to ensure progress data is being received
+
+                                if (typeof response === 'object' && response.status) {
+                                    const progress = response;
+
+                                    // Update progress bar and percentage text
+                                    $('#progressBar').val(progress.percentage);
+                                    $('#progressPercentage').text(progress.percentage + '%');
+                                    $('#imageCount').text(`Generated images: ${progress.generated}/${progress.total}`);
+
+                                    // Stop polling if the task is complete or canceled
+                                    if (progress.status === 'done' || progress.status === 'canceled') {
+                                        clearInterval(interval);
+                                        if (progress.status === 'done') {
+                                            $('#progressBar').val(100);
+                                            $('#progressPercentage').text('100%');
+                                            $('#downloadContainer').show();
+                                            $('#downloadLink').attr('href', `/download/${taskId}`);
+                                            $('#imageCount').text(`Generated images: ${progress.generated}/${progress.total}`);
+                                        }
+                                        $('#cancelContainer').hide();
+                                        $('#progressContainer').hide();
+                                        console.log('Task complete or canceled. Stopping polling.');
+                                    }
+                                } else {
+                                    console.log('Unexpected response format:', response); // Extra debugging information
+                                }
+                            },
+                            error: function() {
+                                console.log('Error accessing progress endpoint for Task ID:', taskId); // Debugging line to indicate progress request failure
+                                clearInterval(interval);
+                                alert('Error checking progress.');
+                            }
+                        });
+                    }, 1000);  // Poll every 1000 milliseconds (1 second)
+                }, 3000);  // Initial delay of 3 seconds
+            }
+        });
+    </script>
+</body>
+</html>
