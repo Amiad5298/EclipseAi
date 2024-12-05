@@ -1,56 +1,114 @@
 <!doctype html>
 <html lang="en">
+
 <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no">
     <title>Upload Excel File</title>
     <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/bootstrap/5.1.3/css/bootstrap.min.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/popper.js/2.11.6/umd/popper.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/bootstrap/5.1.3/js/bootstrap.min.js"></script>
     <style>
         body {
             background-color: #f8f9fa;
             padding: 2rem;
         }
-        #progressContainer, #downloadContainer, #cancelContainer {
+
+        .card {
+            margin-top: 2rem;
+            padding: 2rem;
+        }
+
+        #progressContainer,
+        #downloadContainer,
+        #cancelContainer {
             margin-top: 2rem;
         }
-        #uploadForm {
-            border: 1px solid #dee2e6;
+
+        #dragDropArea {
+            border: 2px dashed #dee2e6;
             padding: 2rem;
-            background-color: #ffffff;
+            background-color: #f8f9fa;
             border-radius: 0.5rem;
+            text-align: center;
+            cursor: pointer;
+            margin-top: 1rem;
+        }
+
+        #dragDropArea.drag-over {
+            background-color: #e8e8e8;
+        }
+
+        #fileInput {
+            display: none;
+        }
+
+        .tooltip-icon {
+            cursor: pointer;
+            color: #007bff;
+        }
+
+        .hidden-content {
+            display: none;
         }
     </style>
 </head>
+
 <body>
     <div class="container">
         <h1 class="text-center mb-4">Upload an Excel File to Generate Background Images</h1>
-        
-        <div class="row justify-content-center">
-            <div class="col-md-8">
-                <!-- Display Current API Key -->
-                <div id="apiKeyContainer" class="mb-4">
-                    <h4>Current OpenAI API Key:</h4>
-                    <p id="currentApiKey">{{ api_key if api_key else "No API Key Set" }}</p>
-                    <form method="POST" action="{{ url_for('set_api_key') }}">
-                        <div class="mb-3">
-                            <label for="api_key" class="form-label">Set/OpenAI API Key:</label>
-                            <input type="text" class="form-control" id="api_key" name="api_key" value="{{ api_key }}" required>
-                        </div>
-                        <button type="submit" class="btn btn-primary w-100">Update API Key</button>
-                    </form>
+
+        <!-- API Key Section -->
+        <div class="card">
+            <div class="card-body">
+                <h5 class="card-title">
+                    Set/OpenAI API Key
+                    <i class="fas fa-info-circle tooltip-icon" data-bs-toggle="tooltip"
+                        title="Your OpenAI API Key is needed to generate the images."></i>
+                </h5>
+                <form method="POST" action="{{ url_for('set_api_key') }}">
+                    <div class="mb-3">
+                        <label for="api_key" class="form-label">API Key:</label>
+                        <input type="password" class="form-control" id="api_key" name="api_key" value="{{ api_key }}" required>
+                    </div>
+                    <button type="submit" class="btn btn-secondary w-100">
+                        <i class="fas fa-key"></i> Update API Key
+                    </button>
+                </form>
+                <p class="mt-3">Current API Key: 
+                    <span id="currentApiKey" class="hidden-content">{{ api_key if api_key else "No API Key Set" }}</span>
+                    <button id="toggleApiKey" class="btn btn-link btn-sm"><i class="fas fa-eye"></i> Show API Key</button>
+                </p>
+            </div>
+        </div>
+
+        <!-- File Upload Section -->
+        <div class="card">
+            <div class="card-body">
+                <h5 class="card-title">
+                    Upload Excel File
+                    <i class="fas fa-info-circle tooltip-icon" data-bs-toggle="tooltip"
+                        title="Upload an Excel (.xlsx) file containing the data required to generate the images."></i>
+                </h5>
+
+                <div id="dragDropArea">
+                    <p>Drag & Drop your Excel file here or click to upload</p>
+                    <i class="fas fa-cloud-upload-alt fa-3x"></i>
                 </div>
 
-                <!-- File Upload Form -->
                 <form id="uploadForm" enctype="multipart/form-data">
-                    <div class="mb-3">
-                        <input type="file" class="form-control" name="file" id="fileInput" accept=".xlsx" required>
-                    </div>
-                    <button type="submit" class="btn btn-primary w-100">Upload</button>
+                    <input type="file" class="form-control" name="file" id="fileInput" accept=".xlsx" required>
+                    <div id="fileNameDisplay" class="mt-2" style="display: none;">Selected File: <span id="fileName"></span></div>
+                    <button type="submit" class="btn btn-primary w-100 mt-3">
+                        <i class="fas fa-upload"></i> Upload
+                    </button>
                 </form>
             </div>
         </div>
 
+        <!-- Progress Section -->
         <div id="progressContainer" class="text-center" style="display: none;">
             <h3>Progress:</h3>
             <progress id="progressBar" value="0" max="100" class="w-100"></progress>
@@ -58,21 +116,92 @@
             <p id="imageCount">Generated images: 0/0</p>
         </div>
 
+        <!-- Cancel Task Section -->
         <div id="cancelContainer" class="text-center" style="display: none;">
-            <button id="cancelButton" class="btn btn-danger">Cancel Task</button>
+            <button id="cancelButton" class="btn btn-danger">
+                <i class="fas fa-times-circle"></i> Cancel Task
+            </button>
         </div>
 
-        <div id="downloadContainer" class="text-center" style="display: none;">
-            <h3>Download:</h3>
-            <a id="downloadLink" href="#" class="btn btn-success">Download Generated Images</a>
+        <!-- Download Section -->
+        <div class="card text-center mt-4" id="downloadContainer" style="display: none;">
+            <div class="card-body">
+                <h3 class="card-title">Download:</h3>
+                <a id="downloadLink" href="#" class="btn btn-success">
+                    <i class="fas fa-download"></i> Download Generated Images
+                </a>
+            </div>
         </div>
     </div>
 
     <script>
-        $(document).ready(function() {
+        $(document).ready(function () {
             let currentTaskId = null;
 
-            $('#uploadForm').on('submit', function(event) {
+            // Enable Bootstrap tooltips
+            var tooltipTriggerList = [].slice.call(document.querySelectorAll('[data-bs-toggle="tooltip"]'));
+            tooltipTriggerList.forEach(function (tooltipTriggerEl) {
+                new bootstrap.Tooltip(tooltipTriggerEl);
+            });
+
+            // Toggle API Key visibility
+            $('#toggleApiKey').on('click', function () {
+                const currentApiKey = $('#currentApiKey');
+                if (currentApiKey.hasClass('hidden-content')) {
+                    currentApiKey.removeClass('hidden-content');
+                    $(this).html('<i class="fas fa-eye-slash"></i> Hide API Key');
+                } else {
+                    currentApiKey.addClass('hidden-content');
+                    $(this).html('<i class="fas fa-eye"></i> Show API Key');
+                }
+            });
+
+            // Handle drag-and-drop
+            const dragDropArea = $('#dragDropArea');
+            const fileInput = $('#fileInput');
+            const fileNameDisplay = $('#fileNameDisplay');
+            const fileNameSpan = $('#fileName');
+
+            dragDropArea.on('click', function () {
+                fileInput.click();
+            });
+
+            dragDropArea.on('dragover', function (event) {
+                event.preventDefault();
+                event.stopPropagation();
+                dragDropArea.addClass('drag-over');
+            });
+
+            dragDropArea.on('dragleave', function (event) {
+                event.preventDefault();
+                event.stopPropagation();
+                dragDropArea.removeClass('drag-over');
+            });
+
+            dragDropArea.on('drop', function (event) {
+                event.preventDefault();
+                event.stopPropagation();
+                dragDropArea.removeClass('drag-over');
+
+                const files = event.originalEvent.dataTransfer.files;
+                if (files.length > 0) {
+                    fileInput[0].files = files;
+
+                    // Display the name of the selected file
+                    fileNameSpan.text(files[0].name);
+                    fileNameDisplay.show();
+                }
+            });
+
+            // Handle manual file selection (in case user clicks to select instead of dragging and dropping)
+            fileInput.on('change', function () {
+                if (fileInput[0].files.length > 0) {
+                    fileNameSpan.text(fileInput[0].files[0].name);
+                    fileNameDisplay.show();
+                }
+            });
+
+            $('#uploadForm').on('submit', function (event) {
                 event.preventDefault();
                 const formData = new FormData(this);
                 $('#progressContainer').show();
@@ -87,18 +216,18 @@
                     xhrFields: {
                         withCredentials: true
                     },
-                    success: function(response) {
+                    success: function (response) {
                         currentTaskId = response.task_id;
                         console.log('Task ID:', currentTaskId); // Debugging line to ensure Task ID is returned
                         checkProgress(currentTaskId);
                     },
-                    error: function() {
+                    error: function () {
                         alert('Error uploading the file.');
                     }
                 });
             });
 
-            $('#cancelButton').on('click', function() {
+            $('#cancelButton').on('click', function () {
                 if (currentTaskId) {
                     $.ajax({
                         url: `/cancel/${currentTaskId}`,
@@ -106,7 +235,7 @@
                         xhrFields: {
                             withCredentials: true
                         },
-                        success: function(response) {
+                        success: function (response) {
                             alert('Task has been canceled.');
                             $('#progressContainer').hide();
                             $('#cancelContainer').hide();
@@ -114,7 +243,7 @@
                             $('#progressPercentage').text('0%');
                             $('#imageCount').text('Generated images: 0/0');
                         },
-                        error: function() {
+                        error: function () {
                             alert('Error canceling the task.');
                         }
                     });
@@ -122,12 +251,12 @@
             });
 
             function checkProgress(taskId) {
-                setTimeout(function() {
-                    const interval = setInterval(function() {
+                setTimeout(function () {
+                    const interval = setInterval(function () {
                         $.ajax({
                             url: `/progress/${taskId}`,
                             type: 'GET',
-                            success: function(response) {
+                            success: function (response) {
                                 console.log('Progress response:', response); // Debugging line to ensure progress data is being received
 
                                 if (typeof response === 'object' && response.status) {
@@ -156,14 +285,14 @@
                                     console.log('Unexpected response format:', response); // Extra debugging information
                                 }
                             },
-                            error: function() {
+                            error: function () {
                                 console.log('Error accessing progress endpoint for Task ID:', taskId); // Debugging line to indicate progress request failure
                                 clearInterval(interval);
                                 alert('Error checking progress.');
                             }
                         });
-                    }, 1000);  // Poll every 1000 milliseconds (1 second)
-                }, 3000);  // Initial delay of 3 seconds
+                    }, 1000); // Poll every 1000 milliseconds (1 second)
+                }, 3000); // Initial delay of 3 seconds
             }
         });
     </script>

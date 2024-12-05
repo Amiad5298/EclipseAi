@@ -65,7 +65,7 @@ class BackgroundImageCreator:
                     }
                 return saved_images
 
-            saved_image_path = self.image_saver.save_image(image_url, row['name'])
+            saved_image_path = self.image_saver.save_image(image_url, row['name'], row['LastName'])
             saved_images.append(saved_image_path)
 
             # Update progress
