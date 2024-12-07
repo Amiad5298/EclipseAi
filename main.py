@@ -61,7 +61,7 @@ def upload_file():
             def process_task():
                 try:
                     # Pass the API key directly instead of accessing the session in the thread
-                    background_image_creator = BackgroundImageCreator(api_key=api_key, excel_file_path=tmp_file.name, output_dir=output_dir, task_id=task_id)
+                    background_image_creator = BackgroundImageCreator(api_key=api_key, excel_file_path=tmp_file.name, output_dir=output_dir, task_id=task_id, progress=progress, progress_lock=progress_lock)
                     saved_images = background_image_creator.process()
 
                     zip_path = os.path.join(output_dir, 'background_images.zip')
@@ -79,7 +79,13 @@ def upload_file():
                     print(f"Task ID {task_id} completed with progress: {progress[task_id]}")
                 except ValueError as e:
                     with progress_lock:
-                        progress[task_id] = f"error: {str(e)}"
+                        progress[task_id] = {
+                            "percentage": 0,
+                            "generated": 0,
+                            "total": 0,
+                            "status": "error",
+                            "error_message": str(e)
+                        }
                     print(f"Task ID {task_id} failed with error: {str(e)}")
 
             # Run the processing in a separate thread
